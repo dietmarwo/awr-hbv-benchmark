@@ -1,4 +1,4 @@
-This fork is done to prepare a new example for https://github.com/dietmarwo/fast-cma-es
+This fork is done to prepare a new example for https://github.com/dietmarwo/fast-cma-es .
 It adds a ctypes based Python interface and removes all global variables to enable 
 parallelization.
 
