@@ -15,15 +15,13 @@ You should have received a copy of the GNU Lesser General Public License
 along with the HBV Benchmark Problem.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifdef HBVMOD
+//#ifdef HBVMOD
 
 #include "HBV.h"
 #include <math.h>
 
-extern HBV hbv;
-extern HBV* hbvPtr;
-extern int lolo;
-extern int oldSnow;
+//extern int lolo;
+//extern int oldSnow;
 
 //***********************************************************************
 //Snowmelt routine
@@ -324,7 +322,7 @@ void mySnow(double &sd, double &ld, double sfcf, double cfr, double cwh, double 
 //*****************************************************************************
 //Subroutine calculates snow accumulation and snowmelt
 //*****************************************************************************
-void soil(double pe, double &sw, double fc, double be, double &qd)
+void soil(HBV *hbv, double pe, double &sw, double fc, double be, double &qd)
 {
     ///////////////////////////////////////////////////////////
     //Parameter in code | parameter in manual | description
@@ -382,7 +380,7 @@ void soil(double pe, double &sw, double fc, double be, double &qd)
 
     hh = fabs(sw - swo);
 
-    if (hh > 10.6) lolo = 1;
+    if (hh > 10.6) hbv->lolo = 1;
 
     return;
 }
@@ -492,7 +490,7 @@ void zonesNew(HBV *hbv, int ic, int dataIndex)
         tti = config->ttint[ic][i];  //Temperate interval over which a mix of snow and rain occurs
 
         //Snow module
-        if (oldSnow) snow(sd, tc, pd, dd, pe, tt, tdt);
+        if (hbv->oldSnow) snow(sd, tc, pd, dd, pe, tt, tdt);
         else mySnow(sd, ld, sfcf, cfr, cwh, tc, pd, dd, pe, tt, tti);
         //pe - effective precip - this is what comes out of the snow model
         //sd - snow depth - is also updated in snow
@@ -513,10 +511,10 @@ void zonesNew(HBV *hbv, int ic, int dataIndex)
         fc = config->fcap[ic][i]; //maximum soil storage capacity
 
         //QD direct runoff
-        if (pe > 0.6) lolo = 1;
+        if (pe > 0.6) hbv->lolo = 1;
 
         //Soil module
-        soil(pe, sw, fc, be, qd);
+        soil(hbv, pe, sw, fc, be, qd);
         //qd - runoff from soil moisture module - is updated in soil.
 
         //Change in storage volume
@@ -634,7 +632,7 @@ void disch(HBV *hbv, int ic, double &Qall)
     //Qall = (Q0 + Q1 + Q2) * config->art[ic] * 1000.0 / config->tst;
     //I don't know what he was doing above, but now the units should be in mm/tst;
     Qall = (Q0 + Q1 + Q2);
-    if (Qall > 700.0 / double(config->nagg)) lolo = 1;
+    if (Qall > 700.0 / double(config->nagg)) hbv->lolo = 1;
 
     //Track the reservoir levels
     config->sums1[ic] += config->stw1[ic];
@@ -693,7 +691,7 @@ void outind(HBV *hbv, double Qall, int ic, int it)
     flows->Qout[ic][it] = flows->Qind[ic][it];
     flows->Qtou[ic][it] = 0.0;
 
-    if (flows->Qout[ic][it] > 50.0) lolo = 1;
+    if (flows->Qout[ic][it] > 50.0) hbv->lolo = 1;
 
     delete[] wei;
 
@@ -895,7 +893,7 @@ void processNew(HBV *hbv, int startingIndex, int PeriodLength, int writeOutput)
     for (int ic = 0; ic<config->nCatch; ic++)
     {
         //JBK - Changed this from 10 to what you see...
-        for (int it=0; it<2*hbvPtr->config.maxbas[ic]; it++)
+        for (int it=0; it<2*hbv->config.maxbas[ic]; it++)
         {
             flows->Qout[ic][it] = 0.0;
             flows->Qind[ic][it] = 0.0;
@@ -912,11 +910,11 @@ void processNew(HBV *hbv, int startingIndex, int PeriodLength, int writeOutput)
 //C:  
         //meteo(hbv, isend, imon);
 
-        config->tcel[0][0]    = hbvPtr->data.avgTemp[startingIndex+itv];
-        config->pdep[0][0]    = hbvPtr->data.precip[startingIndex+itv];
+        config->tcel[0][0]    = hbv->data.avgTemp[startingIndex+itv];
+        config->pdep[0][0]    = hbv->data.precip[startingIndex+itv];
         //config->poev[0][0][0] = hbvPtr->data.evap[startingIndex+itv];
         //Now, we are using the Hamon PE
-        config->poev[0][0][0] = hbvPtr->evap.PE[itv];
+        config->poev[0][0][0] = hbv->evap.PE[itv];
 
         for (int i=0; i<config->nCatch; i++)
         {
@@ -973,7 +971,7 @@ void processNew(HBV *hbv, int startingIndex, int PeriodLength, int writeOutput)
             }
             it = 1;
             //This may be a problem area
-            backflow(hbvPtr);
+            backflow(hbv);
         }
 
         if (writeOutput)
@@ -1001,7 +999,7 @@ void processNew(HBV *hbv, int startingIndex, int PeriodLength, int writeOutput)
         //!!!!!!!!!!!!!!!!!!
         //statis(hbv, Qagg, it, imon);
 
-        if (Qagg[0] > 300) lolo = 1;
+        if (Qagg[0] > 300) hbv->lolo = 1;
 
         if (writeOutput)
         {
@@ -1012,7 +1010,7 @@ void processNew(HBV *hbv, int startingIndex, int PeriodLength, int writeOutput)
             {
                 resu << setw(10) << Qagg[ll];
                 //resu << setw(10) << Qis[ll];
-                resu << setw(10) << hbvPtr->data.flow[startingIndex+itv];
+                resu << setw(10) << hbv->data.flow[startingIndex+itv];
             }
             resu << endl;
         }
@@ -1059,4 +1057,4 @@ void processNew(HBV *hbv, int startingIndex, int PeriodLength, int writeOutput)
 }
 
 
-#endif
+//#endif

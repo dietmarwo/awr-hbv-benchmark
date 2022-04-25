@@ -15,7 +15,7 @@ You should have received a copy of the GNU Lesser General Public License
 along with the HBV Benchmark Problem.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#if defined(HYMOD) || defined(HBVMOD) || defined(HLRMS)
+//#if defined(HYMOD) || defined(HBVMOD) || defined(HLRMS)
 
 #include "WaterObjectives.h"
 #include "QuickSort.h"
@@ -253,5 +253,5 @@ void allocateObjectives(Objectives *objs, int size, int periodLength)
     return;
 }
 
-#endif //HYMOD
+//#endif //HYMOD
 

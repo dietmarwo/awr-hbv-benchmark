@@ -60,25 +60,6 @@ int nObj = 4;          //Number of performance objectives
 int nTagAlongs = 0;    //Number of tag along variables
 //string outputFile = "output.out";     //Name of output file
 
-//Create an abbreviated Individual structure 
-struct Individual {
-
-     double *xreal;
-     double *obj;
-     double *tag_along;
-
-};
-
-Individual ind;
-Individual* indPtr = &ind;
-
-HBV hbv;
-HBV *hbvPtr = &hbv;
-
-Objectives objs;
-Objectives *objsPtr = &objs;
-
-int oldSnow = 0;
 
 //These are settings for a 10 year calibration period
 int dateStart[3] = {1961, 10, 1};
@@ -88,175 +69,220 @@ int dayStartIndex = 274; //10-1 is day 274 of the year
 //The objective values get calculated on the time series values following the first year of simulation
 int nDays = 4017; //11 years total - 1 year of warmup, 10 years of calibration, and 2 leap years.
 int startingIndex = 5023-1; //The starting index of the data array corresponding with the start date
-
 int PeriodLength;
-int *Period;
 
-int lolo = 0; //This is some sort of flag that was never defined in the Fortran code
+//int oldSnow = 0;
+//int lolo = 0; //This is some sort of flag that was never defined in the Fortran code
 
-void init_HBV(int argc, char **argv)
-{
-    //Set up simulation period
-    PeriodLength = nDays;
-    //PeriodLength = DayLast - DayFirst + 1;
-    Period = new int[PeriodLength];
-    for (int d=0; d<PeriodLength; d++)
+//Create an abbreviated Individual structure 
+struct Individual {
+
+     double *xreal;
+     double *obj;
+     double *tag_along;
+
+};
+
+
+class HBV_MAIN {
+public:
+    Individual ind;
+    Individual* indPtr = &ind;
+
+    HBV hbv;
+    HBV *hbvPtr = &hbv;
+
+    Objectives objs;
+    Objectives *objsPtr = &objs;
+
+    int *Period;
+
+    void init_HBV(int argc, char **argv)
     {
-        Period[d] = startingIndex+d;
+
+        hbv.lolo = 0;
+        hbv.oldSnow = 0;
+        //Set up simulation period
+        PeriodLength = nDays;
+        //PeriodLength = DayLast - DayFirst + 1;
+        Period = new int[PeriodLength];
+        for (int d=0; d<PeriodLength; d++)
+        {
+            Period[d] = startingIndex+d;
+        }
+
+        //If not, they are sized according to numSamples
+        allocateObjectives(objsPtr, numSamples, PeriodLength);
+
+        simpleConfiguration(hbvPtr);
+        readMOPEXData(&hbv.data, "WIL.in");
+        initParameters(hbvPtr);
+
+        //Calculate the Hamon Potential Evaporation for the time series
+        calculateHamonPE(&hbv.data, startingIndex, nDays, &hbv.evap, dayStartIndex);
+
+        //Allocate the array used to store the modelled Q
+        hbvPtr->flows.Qmodelled = new double* [hbvPtr->config.nodes];
+        for (int i=0; i<hbvPtr->config.nodes; i++)
+        {
+            hbvPtr->flows.Qmodelled[i] = new double [PeriodLength];
+        }
+
+        //Be sure and move the DA
+        hbvPtr->config.ar[0][0] = hbvPtr->data.DA;
+        hbvPtr->config.art[0] = hbvPtr->data.DA;
     }
 
-    //If not, they are sized according to numSamples
-    allocateObjectives(objsPtr, numSamples, PeriodLength);
-
-    simpleConfiguration(hbvPtr);
-    readMOPEXData(&hbv.data, "WIL.in");
-    initParameters(hbvPtr);
-
-    //Calculate the Hamon Potential Evaporation for the time series
-    calculateHamonPE(&hbv.data, startingIndex, nDays, &hbv.evap, dayStartIndex);
-
-    //Allocate the array used to store the modelled Q
-    hbvPtr->flows.Qmodelled = new double* [hbvPtr->config.nodes];
-    for (int i=0; i<hbvPtr->config.nodes; i++)
+    void calc_HBV(Individual *ind)
     {
-        hbvPtr->flows.Qmodelled[i] = new double [PeriodLength];
-    }
+        //Create pointers to the real variables and objective values of the individual
+        double *xreal  = ind->xreal;
+        double *obj    = ind->obj;
+        double *tag_along = ind->tag_along;
 
-    //Be sure and move the DA
-    hbvPtr->config.ar[0][0] = hbvPtr->data.DA;
-    hbvPtr->config.art[0] = hbvPtr->data.DA;
+        //Reinitialize everything to zero
+        hbvPtr->config.stw1  [0] = 0.0;
+        hbvPtr->config.stw2  [0] = 0.0;
+        hbvPtr->config.sums1 [0] = 0.0;
+        hbvPtr->config.sums2 [0] = 0.0;
+        hbvPtr->config.sowat[0][0]   = 0.0;
+        hbvPtr->config.pwpini[0][0]  = 0.0;
+        hbvPtr->config.fcapini[0][0] = 0.0;
+        hbvPtr->config.sdep[0][0]    = 0.0;
+        hbvPtr->config.pdep[0][0]    = 0.0;
+        hbvPtr->config.tcel[0][0]    = 0.0;
 
-    if (writeOutput)
-    {
-        hbvPtr->files.reserfileName = "RESERVOIR_lumped.txt";
-        hbvPtr->files.resufileName  = "SIMOBSDIS_lumped.txt";
-    }
+        for (int i=0; i<12; i++)
+        {
+            hbvPtr->config.cef[i][0][0]   = 0.0;
+            hbvPtr->config.atemp[i][0][0] = 0.0;
+            hbvPtr->config.poev[i][0][0]  = 0.0;
+        }
 
-    return;
-}
+        //Put the variables associated with the individual into the HyMod parameter structure
+        hbvPtr->config.hl1[0]     = xreal[0]; //[mm]
+        hbvPtr->config.ck0[0]     = 1.0 / xreal[1] * hbvPtr->config.tst / (3600.0 * 24.0); //1/[d]*[d] = [-]
+        hbvPtr->config.ck1[0]     = 1.0 / xreal[2] * hbvPtr->config.tst / (3600.0 * 24.0); //1/[d]*[d] = [-]
+        hbvPtr->config.ck2[0]     = 1.0 / xreal[3] * hbvPtr->config.tst / (3600.0 * 24.0); //1/[d]*[d] = [-]
+        hbvPtr->config.perc[0]    = xreal[4]; //[mm/d] Now percolation is in units of mm.d instead of being specified as a percolation coefficient
+        hbvPtr->config.lp[0][0]   = xreal[5]; //[-]
+        hbvPtr->config.fcap[0][0] = xreal[6]; //[mm]
+        hbvPtr->config.beta[0][0] = xreal[7]; //[-]
+        hbvPtr->config.maxbas[0]  = ROUNDINT((xreal[8] * hbvPtr->config.nagg) / 24); //[d] This was originally being truncated to an int...
+        hbvPtr->config.ttlim[0][0]= xreal[9]; //[degC]
+        hbvPtr->config.degd[0][0] = xreal[10] * hbvPtr->config.tst / (3600.0 * 24.0); //[mm/(degC-d)]
 
-void calc_HBV(Individual *ind)
-{
-    //Create pointers to the real variables and objective values of the individual
-    double *xreal  = ind->xreal;
-    double *obj    = ind->obj;
-    double *tag_along = ind->tag_along;
+        //The remaining parameters depend on whether we are running the old snow model or the new one
+        if (hbvPtr->oldSnow) hbvPtr->config.degw[0][0] = xreal[11];
+        else
+        {
+            hbvPtr->config.sfcf[0][0] = 1.0; //Assuming no snowfall correction
+            hbvPtr->config.cfr[0][0]   = xreal[11];
+            hbvPtr->config.cwh[0][0]   = xreal[12];
+            hbvPtr->config.ttint[0][0] = xreal[13];
+        }
 
-    //Reinitialize everything to zero
-    hbvPtr->config.stw1  [0] = 0.0;
-    hbvPtr->config.stw2  [0] = 0.0;
-    hbvPtr->config.sums1 [0] = 0.0;
-    hbvPtr->config.sums2 [0] = 0.0;
-    hbvPtr->config.sowat[0][0]   = 0.0;
-    hbvPtr->config.pwpini[0][0]  = 0.0;
-    hbvPtr->config.fcapini[0][0] = 0.0;
-    hbvPtr->config.sdep[0][0]    = 0.0;
-    hbvPtr->config.pdep[0][0]    = 0.0;
-    hbvPtr->config.tcel[0][0]    = 0.0;
+        //After we have read in maxbas, make sure we reinitialize the arrays based on maxbas
+        reinitForMaxBas(hbvPtr);
 
-    for (int i=0; i<12; i++) 
-    {
-        hbvPtr->config.cef[i][0][0]   = 0.0;
-        hbvPtr->config.atemp[i][0][0] = 0.0;
-        hbvPtr->config.poev[i][0][0]  = 0.0;
-    }
+        //Process data
+        processNew(hbvPtr, startingIndex, PeriodLength, writeOutput);
 
-    //Put the variables associated with the individual into the HyMod parameter structure
-    hbvPtr->config.hl1[0]     = xreal[0]; //[mm]
-    hbvPtr->config.ck0[0]     = 1.0 / xreal[1] * hbvPtr->config.tst / (3600.0 * 24.0); //1/[d]*[d] = [-]
-    hbvPtr->config.ck1[0]     = 1.0 / xreal[2] * hbvPtr->config.tst / (3600.0 * 24.0); //1/[d]*[d] = [-]
-    hbvPtr->config.ck2[0]     = 1.0 / xreal[3] * hbvPtr->config.tst / (3600.0 * 24.0); //1/[d]*[d] = [-]
-    hbvPtr->config.perc[0]    = xreal[4]; //[mm/d] Now percolation is in units of mm.d instead of being specified as a percolation coefficient
-    hbvPtr->config.lp[0][0]   = xreal[5]; //[-]
-    hbvPtr->config.fcap[0][0] = xreal[6]; //[mm]
-    hbvPtr->config.beta[0][0] = xreal[7]; //[-]
-    hbvPtr->config.maxbas[0]  = ROUNDINT((xreal[8] * hbvPtr->config.nagg) / 24); //[d] This was originally being truncated to an int...
-    hbvPtr->config.ttlim[0][0]= xreal[9]; //[degC]
-    hbvPtr->config.degd[0][0] = xreal[10] * hbvPtr->config.tst / (3600.0 * 24.0); //[mm/(degC-d)]
+        calculateObjectives(objsPtr, hbvPtr->flows.Qmodelled[0], hbvPtr->data.flow, hbvPtr->data.precip, startingIndex, PeriodLength, 0);
+
+        //Fill out the individuals objective values
+        obj[0] = objs.nse[0];
+        obj[1] = objs.trmse[0];
+        obj[2] = objs.roce[0];
+        obj[3] = objs.sfdce[0];
     
-    //The remaining parameters depend on whether we are running the old snow model or the new one
-    if (oldSnow) hbvPtr->config.degw[0][0] = xreal[11];
-    else
-    {
-        hbvPtr->config.sfcf[0][0] = 1.0; //Assuming no snowfall correction
-        hbvPtr->config.cfr[0][0]   = xreal[11];
-        hbvPtr->config.cwh[0][0]   = xreal[12];
-        hbvPtr->config.ttint[0][0] = xreal[13];
+        return;
+    }
+};
+
+extern "C" {
+
+    intptr_t hbv_C() {
+        HBV_MAIN* hbvp = new HBV_MAIN();
+        hbvp->indPtr->obj       = new double [nObj];
+        hbvp->indPtr->xreal     = new double [nParams];
+        hbvp->indPtr->tag_along = new double [nTagAlongs];
+
+        //Initialize HBV
+        hbvp->init_HBV(0, NULL);
+        return (intptr_t) hbvp;
     }
 
-    //After we have read in maxbas, make sure we reinitialize the arrays based on maxbas
-    reinitForMaxBas(hbvPtr);
+    void fitness_hbv_C(intptr_t ihbvp, double* x, double* objs) {
+        try {
+            HBV_MAIN* hbvp = (HBV_MAIN*) ihbvp;
+            //hbvPtr = hbvp->hbvPtr;
+            //Allocate the "Individual" which holds the performance objs, paramets, and tag alongs;
+            for (int i = 0; i < nParams; i++)
+                hbvp->indPtr->xreal[i] = x[i];
+            hbvp->calc_HBV(hbvp->indPtr);
+            //fprintf(stdout, "%e %e %e %e\n", hbvp->indPtr->obj[0], hbvp->indPtr->obj[1], hbvp->indPtr->obj[2], hbvp->indPtr->obj[3]); //output back to java via STDOUT
+            for (int i = 0; i < nObj; i++)
+                 objs[i] = hbvp->indPtr->obj[i];
 
-    //Process data
-    processNew(hbvPtr, startingIndex, PeriodLength, writeOutput);
-
-    calculateObjectives(objsPtr, hbvPtr->flows.Qmodelled[0], hbvPtr->data.flow, hbvPtr->data.precip, startingIndex, PeriodLength, 0);
-
-    //Fill out the individuals objective values
-    obj[0] = objs.nse[0];
-    obj[1] = objs.trmse[0];
-    obj[2] = objs.roce[0];
-    obj[3] = objs.sfdce[0];
-
-    return;
-}
-
-void finalize_HBV()
-{
-    return;
+        } catch (std::exception &e) {
+              cout << e.what() << endl;
+        }
+    }
 }
 
 //Main function for when we are just running HBV by itself using a different sampling technique
 int main(int argc, char **argv)
 {
 
-	int response; 
-
-    //Allocate the "Individual" which holds the performance objs, paramets, and tag alongs;
-    indPtr->obj       = new double [nObj];
-    indPtr->xreal     = new double [nParams];
-	indPtr->tag_along = new double [nTagAlongs];
-
-    //Initialize HBV
-    init_HBV(argc, argv);
-
-	while (1) //loop to wait for MOEAFramework to send variables over stdin
-	{
-		// Read values from stdin
-		response = fscanf(stdin,"%lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", 
-			&indPtr->xreal[0], &indPtr->xreal[1], &indPtr->xreal[2], &indPtr->xreal[3], 
-			&indPtr->xreal[4], &indPtr->xreal[5], &indPtr->xreal[6], &indPtr->xreal[7], 
-			&indPtr->xreal[8], &indPtr->xreal[9], &indPtr->xreal[10], &indPtr->xreal[11], 
-			&indPtr->xreal[12], &indPtr->xreal[13]);
-
-		if ((response == EOF) && (ferror(stdin) == 0)) 
-		{
-			//End of stream reached, connection closed successfully
-			exit(0);
-		} 
-		else if (response == EOF) 
-		{
-			//An I/O error occurred
-			fprintf(stderr, "An I/O error occurred: %s\n", strerror(errno));
-			exit(-1);
-		} 
-		else if (response != 14) 
-		{
-			//Invalid number of decision variables in input
-			fprintf(stderr, "Expected 14 inputs on a line!\n");
-			exit(-1);
-		} 
-		else 
-		{
-			//Correct number of inputs; evaluate and output objectives back to java 
-
-			//Run the model
-			calc_HBV(indPtr);
-			
-			fprintf(stdout, "%e %e %e %e\n", indPtr->obj[0], indPtr->obj[1], indPtr->obj[2], indPtr->obj[3]); //output back to java via STDOUT
-			fflush(stdout);
-		}	
-	}
+    intptr_t hbvcp = hbv_C();
+//	int response;
+//
+//    //Allocate the "Individual" which holds the performance objs, paramets, and tag alongs;
+//    indPtr->obj       = new double [nObj];
+//    indPtr->xreal     = new double [nParams];
+//	indPtr->tag_along = new double [nTagAlongs];
+//
+//    //Initialize HBV
+//    init_HBV(argc, argv);
+//
+//	while (1) //loop to wait for MOEAFramework to send variables over stdin
+//	{
+//		// Read values from stdin
+//		response = fscanf(stdin,"%lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf",
+//			&indPtr->xreal[0], &indPtr->xreal[1], &indPtr->xreal[2], &indPtr->xreal[3],
+//			&indPtr->xreal[4], &indPtr->xreal[5], &indPtr->xreal[6], &indPtr->xreal[7],
+//			&indPtr->xreal[8], &indPtr->xreal[9], &indPtr->xreal[10], &indPtr->xreal[11],
+//			&indPtr->xreal[12], &indPtr->xreal[13]);
+//
+//		if ((response == EOF) && (ferror(stdin) == 0))
+//		{
+//			//End of stream reached, connection closed successfully
+//			exit(0);
+//		}
+//		else if (response == EOF)
+//		{
+//			//An I/O error occurred
+//			fprintf(stderr, "An I/O error occurred: %s\n", strerror(errno));
+//			exit(-1);
+//		}
+//		else if (response != 14)
+//		{
+//			//Invalid number of decision variables in input
+//			fprintf(stderr, "Expected 14 inputs on a line!\n");
+//			exit(-1);
+//		}
+//		else
+//		{
+//			//Correct number of inputs; evaluate and output objectives back to java
+//
+//			//Run the model
+//			calc_HBV(indPtr);
+//
+//			fprintf(stdout, "%e %e %e %e\n", indPtr->obj[0], indPtr->obj[1], indPtr->obj[2], indPtr->obj[3]); //output back to java via STDOUT
+//			fflush(stdout);
+//		}
+//	}
 
     return 0;
 }

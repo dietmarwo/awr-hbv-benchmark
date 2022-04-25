@@ -15,7 +15,7 @@ You should have received a copy of the GNU Lesser General Public License
 along with the HBV Benchmark Problem.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifdef HBVMOD
+//#ifdef HBVMOD
 
 #ifndef __hbv_h
 #define __hbv_h
@@ -215,6 +215,8 @@ struct HBV
     Flows flows;
     MOPEXData data;
     HamonEvap evap;
+    int lolo;
+    int oldSnow;
 };
 
 //Function prototypes
@@ -254,7 +256,7 @@ void evapNew(double &sw, double tc, double fcap, double lp, double avt, double p
 
 #endif
 
-#endif //HBV
+//#endif //HBV
 
 
 

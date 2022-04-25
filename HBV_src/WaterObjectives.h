@@ -15,7 +15,7 @@ You should have received a copy of the GNU Lesser General Public License
 along with the HBV Benchmark Problem.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#if defined(HYMOD) || defined(HBVMOD) || defined(HLRMS)
+//#if defined(HYMOD) || defined(HBVMOD) || defined(HLRMS)
 
 #ifndef __objectives_h
 #define __objectives_h
@@ -77,4 +77,4 @@ void calculateObjectives(Objectives *objs, double *Qs,double *Qo, double *precip
 
 #endif
 
-#endif //HYMOD
+//#endif //HYMOD

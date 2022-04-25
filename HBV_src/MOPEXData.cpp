@@ -15,7 +15,7 @@ You should have received a copy of the GNU Lesser General Public License
 along with the HBV Benchmark Problem.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#if defined(HYMOD) || defined(HBVMOD)
+//#if defined(HYMOD) || defined(HBVMOD)
 
 #include <iostream>
 #include <string>
@@ -145,4 +145,4 @@ void readMOPEXData(MOPEXData *data, string filename)
 }
 
 
-#endif //HYMOD
+//#endif //HYMOD

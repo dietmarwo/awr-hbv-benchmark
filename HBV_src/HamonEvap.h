@@ -15,7 +15,7 @@ You should have received a copy of the GNU Lesser General Public License
 along with the HBV Benchmark Problem.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#if defined(HYMOD) || defined(HBVMOD)
+//#if defined(HYMOD) || defined(HBVMOD)
 
 #ifndef __hamonevap_h
 #define __hamonevap_h
@@ -37,7 +37,7 @@ void calculateHamonPE(MOPEXData *data, int dataIndex, int nDays, HamonEvap *evap
 
 #endif
 
-#endif //HYMOD
+//#endif //HYMOD
 
 
 
